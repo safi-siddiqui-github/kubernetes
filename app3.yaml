@@ -1,0 +1,162 @@
+kind: Namespace
+apiVersion: v1
+
+metadata:
+  name: mysql-ns
+
+---
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mysql-pv
+  namespace: mysql-ns
+spec:
+  storageClassName: "standard"
+  capacity:
+    storage: 5Gi
+  accessMode:
+  - ReadWriteOnce
+  hostPath:
+    path: "/mnt/data"
+  
+    
+  # claimRef:
+  #   name: mysql-pvc
+  #   namespace: mysql-ns
+
+---
+
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   name: foo-pvc
+#   namespace: foo
+# spec:
+#   storageClassName: "" # Empty string must be explicitly set otherwise default StorageClass will be set
+#   volumeName: foo-pv
+
+---
+
+kind: Secret
+apiVersion: v1
+
+metadata:
+  name: mysql-secret
+  namespace: mysql-ns
+
+type: opaque
+
+data:
+  MYSQL_ROOT_PASSWORD: QWRtaW4xMjM=
+
+# spec:
+#   volumes:
+#     - name: secret-volume
+#       secret:
+#         secretName: dotfile-secret
+#   containers:
+#     - name: dotfile-test-container
+#       image: registry.k8s.io/busybox
+#       command:
+#         - ls
+#         - "-l"
+#         - "/etc/secret-volume"
+#       volumeMounts:
+#         - name: secret-volume
+#           readOnly: true
+#           mountPath: "/etc/secret-volume"
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-config
+  namespace: mysql-ns
+
+data:
+  MYSQL_DATABASE: db-one
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: mysql-deployment
+  namespace: mysql-ns
+  labels:
+    app: mysql-app
+
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mysql-app
+
+  template:
+    metadata:
+      name: mysql-pod
+      namespace: mysql-ns
+      labels:
+        app: mysql-app
+
+    spec:
+      containers:
+      - name: mysql-con
+        image: mysql:latest
+        ports: 
+        - containerPort: 3306
+        env:
+        - name : MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: MYSQL_ROOT_PASSWORD
+        - name : MYSQL_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: mysql-config
+              key: MYSQL_DATABASE
+
+---
+
+# apiVersion: v1
+# kind: Service
+
+# metadata:
+#   name: mysql-svc
+#   namespace: mysql-ns
+
+# spec:
+#   selector:
+#     app: mysql-app
+#   ports: 
+#     - protocol: TCP
+#       port: 3306
+#       targetPort: 3306
+
+# ---
+
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+
+# metadata:
+#   name: mysql-ing
+#   namespace: mysql-ns
+#   annotations:
+#     nginx.ingress.kubernetes.io/rewrite-target: /
+
+# spec:
+#   rules:
+#   - host: app3.localhost
+#     http:
+#       paths:
+#       - pathType: Prefix
+#         path: /
+#         backend:
+#           service:
+#             name: mysql-svc
+#             port:
+#               number: 3306
